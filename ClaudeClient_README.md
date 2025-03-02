@@ -2,12 +2,13 @@
 
 一个全面的Python工具包，用于与Claude命令行工具进行交互。
 
-## 两种客户端实现
+## 客户端实现
 
-本工具包提供了两种Claude客户端实现：
+本工具包提供了多种Claude客户端实现：
 
 1. **基础版 (ClaudeClient)** - 简单的请求-响应交互
 2. **增强版 (EnhancedClaudeClient)** - 支持任务完成分析和自动跟进
+3. **Gemini增强版** - 使用Google Gemini模型分析任务完成状态
 
 ## 简介
 
@@ -25,11 +26,22 @@
 - 记录完整对话历史
 - 支持对话状态分析
 
+### Gemini增强版特点
+- 使用Google Gemini 2.0 Flash模型分析任务完成状态
+- 更智能的语义理解能力
+- 能够处理不同类型的响应格式
+- 可以识别列表、代码等特殊结构的完整性
+
 ## 安装要求
 
+### 基本需求
 - Python 3.6+
 - pexpect 库
 - 已安装Claude命令行工具
+
+### Gemini增强版额外需求
+- google-generativeai 库
+- 有效的Google Gemini API密钥
 
 ## 使用方法
 
@@ -89,6 +101,39 @@ finally:
     client.close()
 ```
 
+### Gemini增强版用法
+
+```python
+from enhanced_claude_client import EnhancedClaudeClient
+from agent_tools import GeminiTaskAnalyzer
+
+# 设置Gemini API密钥
+api_key = "YOUR_GEMINI_API_KEY"  # 或从环境变量获取
+
+# 创建Gemini分析器
+analyzer = GeminiTaskAnalyzer(api_key=api_key)
+
+# 创建使用Gemini分析器的客户端
+client = EnhancedClaudeClient(analyzer=analyzer)
+
+try:
+    # 启动Claude进程
+    client.start()
+    
+    # 发送请求并等待任务完成
+    response, history = client.send_request(
+        "请介绍一下Python语言的主要特点",
+        auto_continue=True,
+        max_iterations=3
+    )
+    
+    # 输出最终响应
+    print(response)
+finally:
+    # 关闭客户端
+    client.close()
+```
+
 ### 命令行使用
 
 #### 基础版
@@ -121,6 +166,22 @@ python enhanced_claude_client.py --max-iter 5 "请详细解释量子计算原理
 
 # 启用调试模式
 python enhanced_claude_client.py --debug "请解释递归函数"
+```
+
+#### Gemini增强版
+
+```bash
+# 直接分析特定文本
+python gemini_claude_example.py analyze
+
+# Python特点分析示例
+python gemini_claude_example.py python
+
+# 代码生成分析示例
+python gemini_claude_example.py code
+
+# 长篇回复分析示例
+python gemini_claude_example.py partial
 ```
 
 ### 示例文件
@@ -157,6 +218,22 @@ python enhanced_claude_example.py interactive
 
 # 需要更多信息示例
 python enhanced_claude_example.py more_info
+```
+
+#### Gemini增强版示例 (`gemini_claude_example.py`)
+
+```bash
+# Python特点分析
+python gemini_claude_example.py python
+
+# 代码生成分析
+python gemini_claude_example.py code
+
+# 长篇回复分析
+python gemini_claude_example.py partial
+
+# 直接分析特定文本
+python gemini_claude_example.py analyze
 ```
 
 ## API 参考
@@ -216,7 +293,7 @@ python enhanced_claude_example.py more_info
 
 ## 任务分析器
 
-增强版客户端支持两种任务分析器：
+增强版客户端支持多种任务分析器：
 
 ### 规则分析器 (RuleBasedAnalyzer)
 
@@ -227,6 +304,19 @@ python enhanced_claude_example.py more_info
 ### LLM分析器 (LLMTaskAnalyzer)
 
 使用另一个LLM来判断任务是否完成，通过分析对话历史和最新响应。
+
+### Gemini分析器 (GeminiTaskAnalyzer)
+
+使用Google的Gemini 2.0 Flash模型分析任务完成状态：
+- 更强的语义理解能力
+- 能识别不同类型的任务（代码、解释、事实、创意）
+- 根据任务类型调整判断标准
+- 能识别列表格式完整性
+
+#### 初始化参数
+
+- `api_key` (str, 可选): Gemini API密钥
+- `model_name` (str, 可选): Gemini模型名称，默认为'gemini-2.0-flash'
 
 ## 实现原理
 
@@ -248,36 +338,85 @@ python enhanced_claude_example.py more_info
 4. **对话记录**: 维护完整的对话历史
 5. **完整返回**: 返回最终响应和对话历史
 
+### Gemini分析逻辑
+
+1. **任务类型检测**: 根据原始请求识别任务类型
+2. **提示构建**: 构建详细的分析提示，包含原始请求、任务类型、对话历史和最新回复
+3. **模型调用**: 发送请求到Gemini API
+4. **结果解析**: 解析模型返回结果，确定任务状态
+5. **伪判断回退**: 如果API调用失败，使用规则进行基本判断
+
 ## 工具组件集成
 
 增强版客户端使用了`agent_tools`包中的组件：
 
 - **task_analyzer**: 任务完成状态分析器
+- **gemini_analyzer**: 基于Gemini的任务分析器
 - **followup_generator**: 自动跟进问题生成器
 - **llm_service**: LLM服务统一接口 (可选使用)
 - **parser**: LLM响应解析器 (可选使用)
 
+## 性能与准确性比较
+
+| 分析器类型 | 优点 | 缺点 | 适用场景 |
+|----------|------|------|---------|
+| **规则分析器** | 速度快、不需要API调用 | 识别准确率有限，依赖关键词 | 简单任务、明确结构的回复 |
+| **Gemini分析器** | 高准确率、理解语义、识别结构 | 需要API调用、较慢 | 复杂任务、多样化的回复格式 |
+
+## 示例效果
+
+规则分析器和Gemini分析器在分析Python特点列表时的对比：
+
+**Python特点列表**:
+```
+Python是一种高级解释型编程语言，其主要特点包括:
+- 简洁易读的语法
+- 动态类型系统
+- 自动内存管理
+- 丰富的标准库
+- 跨平台兼容性
+- 面向对象编程支持
+- 函数式编程特性
+- 强大的社区和生态系统
+```
+
+- **规则分析器**: 可能判断为"CONTINUE"（除非包含完成指示词）
+- **Gemini分析器**: 正确判断为"COMPLETED"（识别为完整列表）
+
 ## 注意事项
 
-- 确保已安装 Claude 命令行工具并且可以在命令行中运行 `claude` 命令
-- 客户端返回的是 Claude 最后 2000 个字符的输出，如需完整输出请调整代码
-- 默认超时时间为 60 秒，处理复杂请求时可能需要增加此值
-- 每次只能运行一个客户端实例，因为它们都会使用相同的Claude命令行工具
+- 确保已安装Claude命令行工具并且可以运行`claude`命令
+- 使用Gemini分析器需要设置有效的API密钥
+- 客户端返回的是Claude最后2000个字符的输出
+- 默认超时时间为60秒，处理复杂请求时可能需要增加
+- 每次只能运行一个客户端实例
 
 ## 依赖
 
-- [pexpect_claude.py](/home/wangbo/document/wangbo/dev/pexpect_claude.py): 基础的 Claude 交互类
+- [pexpect_claude.py](/home/wangbo/document/wangbo/dev/pexpect_claude.py): 基础的Claude交互类
 - [agent_tools](/home/wangbo/document/wangbo/dev/agent_tools/): 增强功能组件集
+- [google-generativeai](https://pypi.org/project/google-generativeai/): Gemini API访问（仅Gemini增强版需要）
 
 ## 应用场景
 
-1. **作为服务组件**: 将 Claude 集成到更大的应用程序或服务中
+1. **服务组件**: 将Claude集成到更大的应用程序或服务中
 2. **批处理请求**: 批量处理多个请求并保存结果
-3. **自动化工作流**: 将 Claude 作为自动化工作流的一部分
+3. **自动化工作流**: 将Claude作为自动化工作流的一部分
 4. **问答系统**: 构建基于Claude的问答系统
 5. **内容生成**: 自动化内容创建和优化过程
 6. **智能助手**: 构建能够自动跟进的对话助手
 7. **长任务处理**: 自动处理需要多轮交互的复杂任务
+8. **状态感知交互**: 使用Gemini分析器实现更精确的对话状态管理
+
+## 安装Gemini支持
+
+```bash
+# 安装google-generativeai包
+pip install google-generativeai
+
+# 设置环境变量
+export GEMINI_API_KEY="your_api_key_here"
+```
 
 ## 故障排除
 
@@ -286,4 +425,5 @@ python enhanced_claude_example.py more_info
 1. 启用调试模式查看详细日志: `client = EnhancedClaudeClient(debug=True)`
 2. 增加超时时间处理复杂请求: `client = EnhancedClaudeClient(timeout=180)`
 3. 确保仅运行一个Claude实例
-4. 如果客户端无响应，尝试手动终止后台Claude进程
+4. 如果使用Gemini分析器时出错，检查API密钥是否有效
+5. 如果客户端无响应，尝试手动终止后台Claude进程
