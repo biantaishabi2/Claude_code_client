@@ -1,6 +1,8 @@
 # Claude_code_client
 A Python Toolkit for Interacting with Claude via Command Line
 
+English | [中文](README_CN.md)
+
 ## Overview
 
 ClaudeClient is a Python toolkit designed to simplify interactions with the Claude command-line tool. Built upon the `pexpect` library, it enables programmatic access to Claude's conversational capabilities without requiring manual command-line operations.
